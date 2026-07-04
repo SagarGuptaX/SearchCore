@@ -1,323 +1,374 @@
-// #include <bits/stdc++.h> //will  change it at end when project is done
-// using namespace std;
-// namespace fs = std::filesystem;
-// using dir_itr = std::filesystem::directory_iterator;
+#include <iostream>
+#include <vector>
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
+#include <filesystem>
+#include <fstream>
+#include <sstream>
+#include <algorithm>
+#include <cmath>
+#include <queue>
+#include <cstdlib>
+#include <chrono> // For profiling our engine's speed
 
-// int main(int argc, char *argv[])
-// {
-//     if (argc < 2)
-//     {
-//         cout << "ERROR: Please enter corpus path.";
-//         return 1;
-//     }
-//     else
-//     {   unordered_map<string, vector<pair</*id*/int,/*freq*/ int>>> global_index;
-//         string corpus_path = argv[1];
-//         cout << corpus_path << "\n";
-//         unordered_map<int, string> ID_allocator;
-//         int fileID = -1;
-//         for (const auto &file : dir_itr(corpus_path))
-//         { // This map is the secret to keeping your system fast. Later, your massive global Inverted Index will map words to these integer DocIDs (e.g., "disbursement" -> [0, 1, 4]).
-//             // If you did not have this Document Table, you would have to store the full string "corpus/PFC_AR 2025_Notice.txt" inside the Inverted Index every single time a word appeared. Duplicating strings like that bloats your RAM, destroys contiguous memory alignment, and ruins CPU cache locality. By keeping the main index strictly filled with integers, you are perfectly setting the stage for the algorithmic latency metrics and the custom slab allocator in your CacheAudit framework later on.
-//             fileID++;
-//             ID_allocator[fileID] = file.path().string();
-
-//             std::ifstream in_file(file.path().string());
-//             vector<int> doc_length;
-
-//             if (in_file.is_open())
-//             {   int total_words=0;
-//                 string word;
-//                 unordered_map<string, int> word_counter;
-//                 // Read word by word
-//                 while (in_file >> word)
-//                 {   total_words++;
-//                     word_counter[word]++;
-//                 }
-//                 doc_length.push_back(total_words);
-//                 for(const auto& [per_word, freq]: word_counter){
-//                     global_index[per_word].push_back({fileID, freq});
-//                 }
-//             }
-//         }
-//         return 0;
-//     }
-// }
-
-// void search(string query) {
-//     vector<string> tokens;
-//     // 1. Create a stringstream from 'query'
-//     stringstream ss(query);
-//     string word;
-//     // 2. Write a while loop to extract words using >>
-//     while(ss>>word){
-//         // Convert the string to lowercase in-place
-//     std::transform(word.begin(), word.end(), word.begin(), [](unsigned char c) {
-//         return std::tolower(c);
-//     });
-
-//         tokens.push_back(word);
-//     }
-//     // 3. Lowercase each word and push it to 'tokens'
-
-//     // Show me this code!
-// }
-
-// vector<int> intersect(const vector<pair<int, int>>& list1, const vector<pair<int, int>>& list2) {
-//     vector<int> matched_docs;
-//     int i = 0; // Pointer for list1
-//     int j = 0; // Pointer for list2
-
-//     while(i < list1.size() && j < list2.size()) {
-//         // Write the logic here!
-//         if(list1[i].first==list2[j].first) {matched_docs.push_back(list1[i].first); i++; j++;}
-//         while((i < list1.size() && j < list2.size())&&list1[i].first>list2[j].first)j++;
-//         while((i < list1.size() && j < list2.size())&&list1[i].first<list2[j].first)i++;
-//         // Compare list1[i].first (the DocID) with list2[j].first
-//         // If they match, push to matched_docs and move both pointers.
-//         // If one is smaller, move that pointer forward.
-//     }
-
-//     return matched_docs;
-// }
-
-// double avg_doc_len=0;
-// for(const int& x:doc_length){
-//     avg_doc_len+=x;
-// }
-// avg_doc_len/=doc_length.size();
-
-// double k1 = 1.2;
-// double b = 0.75;
-// double N = doc_length.size();
-
-// // We need a place to store our final scores
-// vector<pair<double, int>> doc_scores; // {Score, DocID}
-
-// for (int docID : matched_docs) {
-//     double total_score = 0.0;
-
-//     for (string q : tokens) {
-//         // 1. Get n_q (Number of documents containing word 'q')
-//         double n_q = global_index[q].size();
-
-//         // 2. Calculate IDF (Inverse Document Frequency)
-//         double idf = log((N - n_q + 0.5) / (n_q + 0.5) + 1.0);
-
-//         // 3. Get term frequency of 'q' in this specific 'docID'
-//         double f_q_D;
-//         for(auto& [id,freq]:global_index[q]) if(id==docID) {f_q_D=freq; break;} /* ??? You need to find this! ??? */
-
-//         // 4. Get the length of this specific 'docID'
-//         double dl = doc_length[docID];
-
-//         // 5. Calculate BM25 for this word, and add to total_score
-//         double numerator = f_q_D * (k1 + 1.0);
-//         double denominator = f_q_D + k1 * (1.0 - b + b * (dl / avg_doc_len));
-//         total_score += idf * (numerator / denominator);
-//     }
-
-//     doc_scores.push_back({total_score, docID});
-// }
-
-// sort(doc_scores.rbegin(), doc_scores.rend());
-//
-
-#include <bits/stdc++.h> // Will change to specific headers (iostream, vector, etc.) when finalizing the project
 using namespace std;
 namespace fs = std::filesystem;
 using dir_itr = std::filesystem::directory_iterator;
 
 // ==========================================
-// GLOBAL ARCHITECTURE
+// STOP WORDS DICTIONARY (Domain-Specific)
 // ==========================================
-// 1. The Core Index: Maps a word to a list of {DocID, Frequency}
-unordered_map<string, vector<pair</*id*/ int, /*freq*/ int>>> global_index;
+unordered_set<string> stop_words = {
+    // Legal boilerplate — very high frequency, low value
+    "hereby", "herein", "thereof", "thereto", "therein", "hereunder",
+    "whereas", "pursuant", "aforesaid", "aforementioned", "hereinafter",
+    "notwithstanding", "thereupon", "heretofore",
+    // Articles & Determiners
+    "the", "a", "an", "this", "that", "these", "those", "each", "every", "all", "any",
+    // Prepositions
+    "of", "to", "in", "for", "on", "at", "by", "from", "with", "into", "about",
+    "upon", "under", "over", "between", "through", "against", "during", "within",
+    // Conjunctions
+    "and", "or", "but", "so", "if", "as", "than", "nor",
+    // Verbs (auxiliary / linking)
+    "is", "are", "was", "were", "be", "been", "being",
+    "has", "have", "had", "do", "did", "does", "will", "would",
+    "may", "can", "shall", "should", "could", "might",
+    // Pronouns
+    "it", "its", "we", "our", "they", "their", "he", "she", "you", "i",
+    // Common adverbs / others
+    "not", "no", "also", "such", "more", "other", "said", "up", "out", "then",
+    "than", "however"
+};
 
-// 2. The Document Table: Maps integer DocIDs to actual file paths on disk.
-// We use this to avoid storing massive string paths inside the index, saving RAM and preserving cache locality.
-unordered_map<int, string> ID_allocator;
+// ==========================================
+// GLOBAL ARCHITECTURE (Positional V2)
+// ==========================================
 
-// 3. Document Lengths: A contiguous array storing the total word count of each document.
-// Using a vector here instead of a map ensures O(1) lookup with zero hashing overhead, perfect for BM25 math.
+struct Occurrence {
+    int docID; 
+    int total_frequency; 
+    unordered_map<int, vector<int>> page_positions; 
+};
+
+unordered_map<string, vector<Occurrence>> global_index;
+vector<string> ID_allocator;
 vector<int> doc_length;
 
 // ==========================================
 // STAGE 2: O(N) TWO-POINTER INTERSECTION
 // ==========================================
-// This guarantees sub-5ms latency when searching for multiple words.
-// Because our posting lists are naturally sorted by DocID during the indexing phase,
-// we can intersect them in a single linear pass rather than using slow nested loops.
-vector<int> intersect(const vector<pair<int, int>> &list1, const vector<pair<int, int>> &list2)
+vector<int> intersect(const vector<Occurrence> &list1, const vector<Occurrence> &list2)
 {
     vector<int> matched_docs;
-    int i = 0; // Pointer for list1
-    int j = 0; // Pointer for list2
-
-    // Walk through both lists simultaneously
-    while (i < list1.size() && j < list2.size())
-    {
-        // If they match, this document contains both words. Push it and advance both pointers.
-        if (list1[i].first == list2[j].first)
-        {
-            matched_docs.push_back(list1[i].first);
-            i++;
-            j++;
+    int i = 0, j = 0; 
+    while (i < list1.size() && j < list2.size()) {
+        if (list1[i].docID == list2[j].docID) {
+            matched_docs.push_back(list1[i].docID);
+            i++; j++;
         }
-        // If list1's DocID is smaller, move the i pointer forward to catch up
-        else if (list1[i].first < list2[j].first)
-        {
-            i++;
-        }
-        // If list2's DocID is smaller, move the j pointer forward to catch up
-        else
-        {
-            j++;
-        }
+        else if (list1[i].docID < list2[j].docID) i++;
+        else j++;
     }
     return matched_docs;
 }
-vector<int> intersect(const vector<int> &list1, const vector<pair<int, int>> &list2)//for rolling call from tokens(after token[2])
+
+vector<int> intersect(const vector<int> &list1, const vector<Occurrence> &list2)
 {
     vector<int> matched_docs;
-    int i = 0; // Pointer for list1
-    int j = 0; // Pointer for list2
-
-    // Walk through both lists simultaneously
-    while (i < list1.size() && j < list2.size())
-    {
-        // If they match, this document contains both words. Push it and advance both pointers.
-        if (list1[i] == list2[j].first)
-        {
+    int i = 0, j = 0; 
+    while (i < list1.size() && j < list2.size()) {
+        if (list1[i] == list2[j].docID) {
             matched_docs.push_back(list1[i]);
-            i++;
-            j++;
+            i++; j++;
         }
-        // If list1's DocID is smaller, move the i pointer forward to catch up
-        else if (list1[i] < list2[j].first)
-        {
+        else if (list1[i] < list2[j].docID) i++;
+        else j++;
+    }
+    return matched_docs;
+}
+
+vector<int> union_docs(const vector<int> &list1, const vector<Occurrence> &list2)
+{
+    vector<int> merged_docs;
+    int i = 0, j = 0; 
+    while (i < list1.size() && j < list2.size()) {
+        if (list1[i] == list2[j].docID) {
+            merged_docs.push_back(list1[i]);
+            i++; j++;
+        }
+        else if (list1[i] < list2[j].docID) {
+            merged_docs.push_back(list1[i]);
             i++;
         }
-        // If list2's DocID is smaller, move the j pointer forward to catch up
-        else
-        {
+        else {
+            merged_docs.push_back(list2[j].docID);
             j++;
         }
     }
-    return matched_docs;}
+    while (i < list1.size()) merged_docs.push_back(list1[i++]);
+    while (j < list2.size()) merged_docs.push_back(list2[j++].docID);
+    return merged_docs;
+}
+
+double calculate_slop_multiplier(int docID, const vector<string>& tokens) {
+    if (tokens.size() < 2) return 1.0; 
+
+    double total_multiplier = 1.0;
+
+    for (size_t i = 0; i < tokens.size() - 1; i++) {
+        string word1 = tokens[i];
+        string word2 = tokens[i+1];
+
+        // Memory Safety: Do not insert missing words into global_index
+        if (!global_index.count(word1) || !global_index.count(word2)) continue;
+
+        const Occurrence* occ1 = nullptr;
+        const Occurrence* occ2 = nullptr;
+
+        for (const auto& o : global_index.at(word1)) { if (o.docID == docID) { occ1 = &o; break; } }
+        for (const auto& o : global_index.at(word2)) { if (o.docID == docID) { occ2 = &o; break; } }
+
+        if (!occ1 || !occ2) continue; 
+
+        int min_distance = 999999;
+        bool correct_direction = false;
+
+        for (const auto& [page, pos_list1] : occ1->page_positions) {
+            if (occ2->page_positions.count(page)) {
+                const auto& pos_list2 = occ2->page_positions.at(page);
+                for (int p1 : pos_list1) {
+                    for (int p2 : pos_list2) {
+                        int dist = abs(p2 - p1);
+                        if (dist < min_distance) {
+                            min_distance = dist;
+                            correct_direction = (p2 > p1); 
+                        }
+                    }
+                }
+            }
+        }
+
+        double pair_multiplier = 1.0;
+        if (min_distance == 1) pair_multiplier = 2.0;
+        else if (min_distance <= 5) pair_multiplier = 1.5;
+        else if (min_distance <= 15) pair_multiplier = 1.2;
+
+        if (pair_multiplier > 1.0 && correct_direction) {
+            pair_multiplier *= 1.2;
+        }
+        total_multiplier *= pair_multiplier;
+    }
+    
+    return total_multiplier;
+}
 
 // ==========================================
 // STAGE 3: SEARCH & BM25 RANKING
 // ==========================================
-void search(string query)
+void search(string query, bool silent=false)
 {
-    vector<string> tokens;
+    auto start_time = chrono::steady_clock::now();
 
-    // 1. Tokenization: Create a stringstream from 'query'
+    vector<string> tokens;
+    bool is_or_query = false;
+    if (query.length() >= 3 && 
+        tolower(query[0]) == 'o' && 
+        tolower(query[1]) == 'r' && 
+        query[2] == ':') 
+    {
+        is_or_query = true;
+        query = query.substr(3); 
+    }
+    
+    std::replace(query.begin(), query.end(), '-', ' ');
     stringstream ss(query);
     string word;
 
-    // Extract words using >>
     while (ss >> word)
     {
-        // Convert the string to lowercase in-place to ensure case-insensitive matching
-        std::transform(word.begin(), word.end(), word.begin(), [](unsigned char c)
-                       { return std::tolower(c); });
-        tokens.push_back(word);
-    }
-
-    if (tokens.empty())
-        return;
-
-    // 2. Find Matched Documents (Using Intersection)
-    vector<int> matched_docs;
-    if (tokens.size() == 1)
-    {
-        // Single word search: just grab all DocIDs from its posting list
-        for (auto &p : global_index[tokens[0]])
-            matched_docs.push_back(p.first);
-    }
-    else if (tokens.size() >= 2)
-    {
-        // Multi-word search: intersect the first two words (will expand to rolling loop later)
-        matched_docs = intersect(global_index[tokens[0]], global_index[tokens[1]]);
-        for(int i=2; i<tokens.size(); i++){
-            matched_docs=intersect(matched_docs, global_index[tokens[i]]);
-
+        word.erase(std::remove_if(word.begin(), word.end(), ::ispunct), word.end());
+        std::transform(word.begin(), word.end(), word.begin(), [](unsigned char c) { return std::tolower(c); });
+        if (stop_words.count(word)) continue;
+        if (!word.empty()) {
+            tokens.push_back(word);
         }
     }
 
-    if (matched_docs.empty())
-    {
-        cout << "No matching PFC documents found.\n";
+    if (tokens.empty()) {
+        if (!silent) cout << "Query only contained stop-words (no meaningful words) or punctuation.\n";
         return;
     }
 
-    // 3. BM25 Math Preparation
-    // Calculate Average Document Length for the penalty curve
-    double avg_doc_len = 0.0;
-    for (const int &x : doc_length)
-    {
-        avg_doc_len += x;
+    if (tokens.size() > 10) {
+        if (!silent) cout << "[WARNING] Query too long. Truncating to first 10 words.\n";
+        tokens.resize(10);
     }
+
+    vector<int> matched_docs;
+
+    // Safely load the first word's documents using .count() and .at()
+    if (global_index.count(tokens[0])) {
+        for (auto &occ : global_index.at(tokens[0])) {
+            matched_docs.push_back(occ.docID);
+        }
+    }
+
+    for (size_t i = 1; i < tokens.size(); i++) {
+        if (matched_docs.empty() && !is_or_query) break;
+
+        if (is_or_query) {
+            if (global_index.count(tokens[i])) {
+                matched_docs = union_docs(matched_docs, global_index.at(tokens[i]));
+            }
+        } else {
+            if (global_index.count(tokens[i])) {
+                matched_docs = intersect(matched_docs, global_index.at(tokens[i]));
+            } else {
+                matched_docs.clear(); // Word doesn't exist, AND query instantly fails
+                break;
+            }
+        }
+    }
+    
+    if (matched_docs.empty()) {
+        if (!silent) cout << "No matching documents found.\n";
+        return;
+    }
+
+    double avg_doc_len = 0.0;
+    for (const int &x : doc_length) avg_doc_len += x;
     avg_doc_len /= (double)doc_length.size();
 
-    // BM25 Tuning Constants
-    double k1 = 1.2;              // Controls Term Frequency saturation (prevents long docs from unfairly winning)
-    double b = 0.75;              // Controls Document Length penalty
-    double N = doc_length.size(); // Total documents in corpus
+    double k1 = 1.2;              
+    double b = 0.75;              
+    double N_docs = doc_length.size(); 
 
-    // We need a place to store our final scores: {Score, DocID}
-    vector<pair<double, int>> doc_scores;
+    priority_queue<pair<double, int>, vector<pair<double, int>>, greater<pair<double, int>>> top_k_queue;
+    int MAX_RESULTS = 50; 
 
-    // 4. BM25 Scoring Loop
     for (int docID : matched_docs)
     {
         double total_score = 0.0;
 
         for (string q : tokens)
         {
-            // Get n_q (Number of documents containing word 'q')
-            double n_q = global_index[q].size();
+            if (!global_index.count(q)) continue; // Memory safety
 
-            // Calculate IDF (Inverse Document Frequency) - Boosts rare words over common words
-            double idf = log((N - n_q + 0.5) / (n_q + 0.5) + 1.0);
+            double n_q = global_index.at(q).size();
+            double idf = log((N_docs - n_q + 0.5) / (n_q + 0.5) + 1.0);
 
-            // Get term frequency of 'q' in this specific 'docID'
             double f_q_D = 0.0;
-            for (auto &[id, freq] : global_index[q])
+            for (auto &occ : global_index.at(q))
             {
-                if (id == docID)
-                {
-                    f_q_D = freq;
-                    break; // Stop searching once we find the matching DocID
+                if (occ.docID == docID) {
+                    f_q_D = occ.total_frequency; 
+                    break; 
                 }
             }
 
-            // Get the length of this specific 'docID'
             double dl = doc_length[docID];
-
-            // Calculate BM25 for this word, and add to total_score
             double numerator = f_q_D * (k1 + 1.0);
             double denominator = f_q_D + k1 * (1.0 - b + b * (dl / avg_doc_len));
             total_score += idf * (numerator / denominator);
         }
 
-        doc_scores.push_back({total_score, docID});
+        double slop_multiplier = calculate_slop_multiplier(docID, tokens);
+        total_score *= slop_multiplier; 
+
+        top_k_queue.push({total_score, docID});
+        if (top_k_queue.size() > MAX_RESULTS) {
+            top_k_queue.pop(); 
+        }
     }
 
-    // 5. Sort and Display Results
-    // Using rbegin() and rend() to sort in descending order (highest score first)
-    sort(doc_scores.rbegin(), doc_scores.rend());
+    vector<pair<double, int>> doc_scores;
+    while (!top_k_queue.empty()) {
+        doc_scores.push_back(top_k_queue.top());
+        top_k_queue.pop();
+    }
+    std::reverse(doc_scores.begin(), doc_scores.end());
 
-    cout << "\n--- PFC Top Search Results ---\n";
-    int results_to_show = min(3, (int)doc_scores.size());
-    for (int i = 0; i < results_to_show; i++)
-    {
-        cout << i + 1 << ". " << ID_allocator[doc_scores[i].second]
-             << " (Relevance Score: " << doc_scores[i].first << ")\n";
+    auto end_time = chrono::steady_clock::now();
+    auto duration = chrono::duration_cast<chrono::microseconds>(end_time - start_time);
+
+    // [SHORT CIRCUIT FOR BENCHMARKS]
+    if (silent) {
+        return; 
+    }
+
+    // 5. Pagination UI & Linker (All redundant `if (!silent)` removed from here down)
+    cout << "\n--- Top " << doc_scores.size() << " Search Results ---\n";
+    
+    int PAGE_SIZE = 10;
+    int current_index = 0;
+    string user_input = "";
+
+    while (current_index < doc_scores.size()) {
+        int end_index = min(current_index + PAGE_SIZE, (int)doc_scores.size());
+
+        for (int i = current_index; i < end_index; i++) {
+            int docID = doc_scores[i].second;
+            double score = doc_scores[i].first;
+            string file_path = ID_allocator[docID];
+
+            unordered_map<int, int> page_hits;
+            for (string q : tokens) {
+                if (!global_index.count(q)) continue;
+                for (auto &occ : global_index.at(q)) {
+                    if (occ.docID == docID) {
+                        for (auto const& [page, pos_list] : occ.page_positions) {
+                            page_hits[page] += pos_list.size();
+                        }
+                        break; 
+                    }
+                }
+            }
+
+            int best_page = 999999; 
+            int max_hits = -1;
+            vector<int> all_pages;
+            
+            for (auto const& [page, hits] : page_hits) {
+                all_pages.push_back(page);
+                if (hits > max_hits || (hits == max_hits && page < best_page)) {
+                    max_hits = hits;
+                    best_page = page;
+                }
+            }
+            
+            all_pages.erase(std::remove(all_pages.begin(), all_pages.end(), best_page), all_pages.end());
+
+            string filename = fs::path(file_path).filename().string();
+            cout << i + 1 << ". " << filename << " (Score: " << score << ")\n";
+            
+            if (best_page != 999999) {
+                cout << "   ↳ Best Match: Open directly to Page " << best_page 
+                     << " (file://" << file_path << ")\n";
+            }
+            
+            if (!all_pages.empty()) {
+                cout << "   ↳ Also mentioned on pages: ";
+                int max_pages_to_show = min(5, (int)all_pages.size()); 
+                for (int p = 0; p < max_pages_to_show; p++) {
+                    cout << all_pages[p] << (p == max_pages_to_show - 1 ? "" : ", ");
+                }
+                if (all_pages.size() > 5) cout << "...";
+                cout << "\n";
+            }
+        }
+
+        current_index += PAGE_SIZE;
+
+        if (current_index < doc_scores.size()) {
+            cout << "\n[Press ENTER to show next 10 results, or type 'q' to start a new search] ";
+            getline(cin, user_input);
+            if (user_input == "q" || user_input == "Q") break;
+        }
     }
     cout << "------------------------------\n";
+    cout << "Search latency: " << duration.count() / 1000.0 << " ms\n";
 }
 
 // ==========================================
@@ -332,68 +383,108 @@ int main(int argc, char *argv[])
     }
 
     string corpus_path = argv[1];
-    cout << "Building Index from: " << corpus_path << "...\n";
+    cout << "Building Positional Index from: " << corpus_path << "...\n";
 
-    int fileID = -1;
     for (const auto &file : dir_itr(corpus_path))
     {
-        fileID++;
-        ID_allocator[fileID] = file.path().string();
+        int fileID = ID_allocator.size();
+        ID_allocator.push_back(file.path().string());
 
         std::ifstream in_file(file.path().string());
 
         if (in_file.is_open())
         {
             int total_words = 0;
-            string word;
-            unordered_map<string, int> word_counter;
+            string raw_word;
+            
+            unordered_map<string, Occurrence> local_word_tracker;
+            int current_page_number = 1;
+            int absolute_word_position = 0; 
 
-            // Read word by word
-            while (in_file >> word)
+            while (in_file >> raw_word)
             {
-                total_words++;
+                if (raw_word.find('\f') != string::npos) {
+                    current_page_number++;
+                    absolute_word_position = 0; 
+                    raw_word.erase(std::remove(raw_word.begin(), raw_word.end(), '\f'), raw_word.end());
+                }
 
-                // Clean punctuation and lowercase to ensure clean index keys
-                word.erase(std::remove_if(word.begin(), word.end(), ::ispunct), word.end());
-                std::transform(word.begin(), word.end(), word.begin(), [](unsigned char c)
-                               { return std::tolower(c); });
-
-                if (!word.empty())
+                std::replace(raw_word.begin(), raw_word.end(), '-', ' ');
+                stringstream word_ss(raw_word);
+                string word;
+                
+                while (word_ss >> word) 
                 {
-                    word_counter[word]++;
+                    word.erase(std::remove_if(word.begin(), word.end(), ::ispunct), word.end());
+                    std::transform(word.begin(), word.end(), word.begin(), [](unsigned char c) { return std::tolower(c); });
+                    if (stop_words.count(word)) continue;
+
+                    if (!word.empty())
+                    {
+                        absolute_word_position++;
+                        total_words++;
+
+                        if (local_word_tracker[word].total_frequency == 0) {
+                            local_word_tracker[word].docID = fileID;
+                        }
+                        
+                        local_word_tracker[word].total_frequency++;
+                        local_word_tracker[word].page_positions[current_page_number].push_back(absolute_word_position);
+                    }
                 }
             }
 
-            // Store total word count in contiguous array
             doc_length.push_back(total_words);
 
-            // Flush local file counts into the massive global index
-            for (const auto &[per_word, freq] : word_counter)
+            for (const auto &[per_word, occ_data] : local_word_tracker)
             {
-                global_index[per_word].push_back({fileID, freq});
+                global_index[per_word].push_back(occ_data);
             }
         }
     }
 
     cout << "Index successfully built! Loaded " << doc_length.size() << " documents.\n\n";
 
-    // Continuous Live Search Loop
     string user_query;
     while (true)
     {
         cout << "Enter search query (or type 'exit' to quit): ";
         getline(cin, user_query);
+        
+        if (user_query == "!benchmark") {
+            cout << "\n[System] Initiating 1,000-query benchmark test...\n";
+            
+            vector<string> all_words;
+            for (const auto& [word, occ] : global_index) {
+                all_words.push_back(word);
+            }
+            
+            if (all_words.empty()) continue;
 
-        if (user_query == "exit")
-            break;
-        if (user_query.empty())
+            auto total_start = chrono::steady_clock::now();
+            int num_queries = 1000;
+
+            for (int i = 0; i < num_queries; i++) {
+                string random_q = all_words[rand() % all_words.size()] + " " + 
+                                  all_words[rand() % all_words.size()];
+                search(random_q, true); 
+            }
+
+            auto total_end = chrono::steady_clock::now();
+            auto total_duration = chrono::duration_cast<chrono::microseconds>(total_end - total_start);
+            
+            double avg_latency_ms = (total_duration.count() / 1000.0) / num_queries;
+            
+            cout << "[System] Benchmark Complete!\n";
+            cout << "-> Total Time for " << num_queries << " queries: " << total_duration.count() / 1000.0 << " ms\n";
+            cout << "-> Average Latency: " << avg_latency_ms << " ms per query\n\n";
             continue;
+        }
 
-        auto start = chrono::steady_clock::now();
+        if (user_query == "exit") break;
+        if (user_query.empty()) continue;
+
         search(user_query);
-        auto end = chrono::steady_clock::now();
-auto duration = chrono::duration_cast<chrono::microseconds>(end - start);
-cout << "Search latency: " << duration.count() / 1000.0 << " ms\n";
     }
 
     return 0;
