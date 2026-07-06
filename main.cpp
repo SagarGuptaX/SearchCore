@@ -3,14 +3,14 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
-#include <filesystem>
-#include <fstream>
-#include <sstream>
-#include <algorithm>
-#include <cmath>
+#include <filesystem> //uses of below marked libraries
+#include <fstream>    //
+#include <sstream>    //
+#include <algorithm>  //
+#include <cmath>      //
 #include <queue>
-#include <cstdlib>
-#include <chrono> // For profiling our engine's speed
+#include <cstdlib> //
+#include <chrono>  // For profiling our engine's speed
 
 using namespace std;
 namespace fs = std::filesystem;
@@ -20,6 +20,9 @@ using dir_itr = std::filesystem::directory_iterator;
 // STOP WORDS DICTIONARY (Domain-Specific)
 // ==========================================
 unordered_set<string> stop_words = {
+    // PFC specifuc words; sagar
+    "website", "pfcindia", "co", "in", "cin", "l65910dl1986goi024862", "urjanidhi", "barakhamba", "connaught", "tel", "email",
+
     // Legal boilerplate — very high frequency, low value
     "hereby", "herein", "thereof", "thereto", "therein", "hereunder",
     "whereas", "pursuant", "aforesaid", "aforementioned", "hereinafter",
@@ -39,37 +42,42 @@ unordered_set<string> stop_words = {
     "it", "its", "we", "our", "they", "their", "he", "she", "you", "i",
     // Common adverbs / others
     "not", "no", "also", "such", "more", "other", "said", "up", "out", "then",
-    "than", "however"
-};
+    "than", "however"};
 
 // ==========================================
 // GLOBAL ARCHITECTURE (Positional V2)
 // ==========================================
 
-struct Occurrence {
-    int docID; 
-    int total_frequency; 
-    unordered_map<int, vector<int>> page_positions; 
+struct Occurrence
+{
+    int docID;
+    int total_frequency;
+    unordered_map<int, vector<int>> page_positions;
 };
 
 unordered_map<string, vector<Occurrence>> global_index;
-vector<string> ID_allocator;
+vector<string> ID_allocator; // why  using id instead fo direct path directly?
 vector<int> doc_length;
 
 // ==========================================
-// STAGE 2: O(N) TWO-POINTER INTERSECTION
+// STAGE 2: O(N) TWO-POINTER INTERSECTION sagar: can we do better somehow??
 // ==========================================
 vector<int> intersect(const vector<Occurrence> &list1, const vector<Occurrence> &list2)
 {
     vector<int> matched_docs;
-    int i = 0, j = 0; 
-    while (i < list1.size() && j < list2.size()) {
-        if (list1[i].docID == list2[j].docID) {
+    int i = 0, j = 0;
+    while (i < list1.size() && j < list2.size())
+    {
+        if (list1[i].docID == list2[j].docID)
+        {
             matched_docs.push_back(list1[i].docID);
-            i++; j++;
+            i++;
+            j++;
         }
-        else if (list1[i].docID < list2[j].docID) i++;
-        else j++;
+        else if (list1[i].docID < list2[j].docID)
+            i++;
+        else
+            j++;
     }
     return matched_docs;
 }
@@ -77,14 +85,19 @@ vector<int> intersect(const vector<Occurrence> &list1, const vector<Occurrence> 
 vector<int> intersect(const vector<int> &list1, const vector<Occurrence> &list2)
 {
     vector<int> matched_docs;
-    int i = 0, j = 0; 
-    while (i < list1.size() && j < list2.size()) {
-        if (list1[i] == list2[j].docID) {
+    int i = 0, j = 0;
+    while (i < list1.size() && j < list2.size())
+    {
+        if (list1[i] == list2[j].docID)
+        {
             matched_docs.push_back(list1[i]);
-            i++; j++;
+            i++;
+            j++;
         }
-        else if (list1[i] < list2[j].docID) i++;
-        else j++;
+        else if (list1[i] < list2[j].docID)
+            i++;
+        else
+            j++;
     }
     return matched_docs;
 }
@@ -92,58 +105,164 @@ vector<int> intersect(const vector<int> &list1, const vector<Occurrence> &list2)
 vector<int> union_docs(const vector<int> &list1, const vector<Occurrence> &list2)
 {
     vector<int> merged_docs;
-    int i = 0, j = 0; 
-    while (i < list1.size() && j < list2.size()) {
-        if (list1[i] == list2[j].docID) {
+    int i = 0, j = 0;
+    while (i < list1.size() && j < list2.size())
+    {
+        if (list1[i] == list2[j].docID)
+        {
             merged_docs.push_back(list1[i]);
-            i++; j++;
+            i++;
+            j++;
         }
-        else if (list1[i] < list2[j].docID) {
+        else if (list1[i] < list2[j].docID)
+        {
             merged_docs.push_back(list1[i]);
             i++;
         }
-        else {
+        else
+        {
             merged_docs.push_back(list2[j].docID);
             j++;
         }
     }
-    while (i < list1.size()) merged_docs.push_back(list1[i++]);
-    while (j < list2.size()) merged_docs.push_back(list2[j++].docID);
+    while (i < list1.size())
+        merged_docs.push_back(list1[i++]);
+    while (j < list2.size())
+        merged_docs.push_back(list2[j++].docID);
     return merged_docs;
 }
+vector<int> filter_strict_phrase(const vector<int> &matched_docs, const vector<string> &tokens, const unordered_map<string, vector<Occurrence>> &index)
+{
+    if (tokens.size() < 2)
+        return matched_docs;
+    vector<int> strict_docs;
 
-double calculate_slop_multiplier(int docID, const vector<string>& tokens) {
-    if (tokens.size() < 2) return 1.0; 
+    for (int docID : matched_docs)
+    {
+        bool strict_match_found = false;
+
+        // Grab the positional data for the first word
+        const Occurrence *first_occ = nullptr;
+        for (const auto &o : index.at(tokens[0]))
+        {
+            if (o.docID == docID)
+            {
+                first_occ = &o;
+                break;
+            }
+        }
+        if (!first_occ)
+            continue;
+
+        // Check every page where the first word appears
+        for (const auto &[page, positions] : first_occ->page_positions)
+        {
+            for (int start_pos : positions)
+            {
+                bool sequence_valid = true;
+
+                // Check if subsequent words immediately follow
+                for (size_t i = 1; i < tokens.size(); i++)
+                {
+                    const Occurrence *next_occ = nullptr;
+                    for (const auto &o : index.at(tokens[i]))
+                    {
+                        if (o.docID == docID)
+                        {
+                            next_occ = &o;
+                            break;
+                        }
+                    }
+
+                    if (!next_occ || !next_occ->page_positions.count(page))
+                    {
+                        sequence_valid = false;
+                        break;
+                    }
+
+                    // Look for the exact expected position (start_pos + i)
+                    const auto &next_positions = next_occ->page_positions.at(page);
+                    if (std::find(next_positions.begin(), next_positions.end(), start_pos + i) == next_positions.end())
+                    {
+                        sequence_valid = false;
+                        break;
+                    }
+                }
+
+                if (sequence_valid)
+                {
+                    strict_match_found = true;
+                    break;
+                }
+            }
+            if (strict_match_found)
+                break;
+        }
+
+        if (strict_match_found)
+        {
+            strict_docs.push_back(docID);
+        }
+    }
+    return strict_docs;
+}
+
+double calculate_slop_multiplier(int docID, const vector<string> &tokens)
+{ // sagar: need to make a table of reward points per situation
+    if (tokens.size() < 2)
+        return 1.0;
 
     double total_multiplier = 1.0;
 
-    for (size_t i = 0; i < tokens.size() - 1; i++) {
+    for (size_t i = 0; i < tokens.size() - 1; i++)
+    { // sagar: any particular precaustion we are using unsiggned int?
         string word1 = tokens[i];
-        string word2 = tokens[i+1];
+        string word2 = tokens[i + 1]; // taking two words since we are claculating slop for two adjacent words
 
         // Memory Safety: Do not insert missing words into global_index
-        if (!global_index.count(word1) || !global_index.count(word2)) continue;
+        if (!global_index.count(word1) || !global_index.count(word2))
+            continue;
 
-        const Occurrence* occ1 = nullptr;
-        const Occurrence* occ2 = nullptr;
+        const Occurrence *occ1 = nullptr;
+        const Occurrence *occ2 = nullptr;
 
-        for (const auto& o : global_index.at(word1)) { if (o.docID == docID) { occ1 = &o; break; } }
-        for (const auto& o : global_index.at(word2)) { if (o.docID == docID) { occ2 = &o; break; } }
+        for (const auto &o : global_index.at(word1))
+        {
+            if (o.docID == docID)
+            {
+                occ1 = &o;
+                break;
+            }
+        } // benefit of  .at(),
+        for (const auto &o : global_index.at(word2))
+        {
+            if (o.docID == docID)
+            {
+                occ2 = &o;
+                break;
+            }
+        } // seems very inefficient for calling loop like this twice
 
-        if (!occ1 || !occ2) continue; 
+        if (!occ1 || !occ2)
+            continue; // i didnt get uses of occ1 and occ2
 
-        int min_distance = 999999;
+        int min_distance = 999999; // INT_MAX
         bool correct_direction = false;
 
-        for (const auto& [page, pos_list1] : occ1->page_positions) {
-            if (occ2->page_positions.count(page)) {
-                const auto& pos_list2 = occ2->page_positions.at(page);
-                for (int p1 : pos_list1) {
-                    for (int p2 : pos_list2) {
-                        int dist = abs(p2 - p1);
-                        if (dist < min_distance) {
+        for (const auto &[page, pos_list1] : occ1->page_positions)
+        {
+            if (occ2->page_positions.count(page))
+            {
+                const auto &pos_list2 = occ2->page_positions.at(page);
+                for (int p1 : pos_list1)
+                {
+                    for (int p2 : pos_list2)
+                    {
+                        int dist = abs(p2 - p1); // no way to reduce this double loop?? the whole code seems robust yet inefficeint.
+                        if (dist < min_distance)
+                        {
                             min_distance = dist;
-                            correct_direction = (p2 > p1); 
+                            correct_direction = (p2 > p1);
                         }
                     }
                 }
@@ -151,102 +270,145 @@ double calculate_slop_multiplier(int docID, const vector<string>& tokens) {
         }
 
         double pair_multiplier = 1.0;
-        if (min_distance == 1) pair_multiplier = 2.0;
-        else if (min_distance <= 5) pair_multiplier = 1.5;
-        else if (min_distance <= 15) pair_multiplier = 1.2;
+        if (min_distance == 1)
+            pair_multiplier = 2.0;
+        else if (min_distance <= 5)
+            pair_multiplier = 1.5;
+        else if (min_distance <= 15)
+            pair_multiplier = 1.2;
 
-        if (pair_multiplier > 1.0 && correct_direction) {
+        if (pair_multiplier > 1.0 && correct_direction)
+        {
             pair_multiplier *= 1.2;
         }
         total_multiplier *= pair_multiplier;
     }
-    
+
     return total_multiplier;
 }
 
 // ==========================================
 // STAGE 3: SEARCH & BM25 RANKING
 // ==========================================
-void search(string query, bool silent=false)
+void search(string query, bool silent = false)
 {
     auto start_time = chrono::steady_clock::now();
 
     vector<string> tokens;
     bool is_or_query = false;
-    if (query.length() >= 3 && 
-        tolower(query[0]) == 'o' && 
-        tolower(query[1]) == 'r' && 
-        query[2] == ':') 
+    if (query.length() >= 3 &&
+        tolower(query[0]) == 'o' &&
+        tolower(query[1]) == 'r' &&
+        query[2] == ':')
     {
         is_or_query = true;
-        query = query.substr(3); 
+        query = query.substr(3);
     }
-    
+    bool is_strict_query = false;
+    if (query.length() >= 7 && query.substr(0, 7) == "strict:")
+    {
+        is_strict_query = true;
+        query = query.substr(7);
+    }
+
     std::replace(query.begin(), query.end(), '-', ' ');
     stringstream ss(query);
     string word;
 
     while (ss >> word)
     {
-        word.erase(std::remove_if(word.begin(), word.end(), ::ispunct), word.end());
-        std::transform(word.begin(), word.end(), word.begin(), [](unsigned char c) { return std::tolower(c); });
-        if (stop_words.count(word)) continue;
-        if (!word.empty()) {
+        word.erase(std::remove_if(word.begin(), word.end(), [](unsigned char c)
+                                  { return !std::isalnum(c); }),
+                   word.end());
+
+        std::transform(word.begin(), word.end(), word.begin(), [](unsigned char c)
+                       { return std::tolower(c); });
+        // IMPORTANT: Skip stop-words if it's a strict phrase so the distance gaps remain perfectly intact!
+        if (stop_words.count(word))
+            continue;
+
+        if (!word.empty())
+        {
             tokens.push_back(word);
         }
     }
 
-    if (tokens.empty()) {
-        if (!silent) cout << "Query only contained stop-words (no meaningful words) or punctuation.\n";
+    if (tokens.empty())
+    {
+        if (!silent)
+            std::cout << "Query only contained stop-words (no meaningful words) or punctuation." << endl;
         return;
     }
 
-    if (tokens.size() > 10) {
-        if (!silent) cout << "[WARNING] Query too long. Truncating to first 10 words.\n";
+    if (tokens.size() > 10)
+    { // need to understand use of silent
+        if (!silent)
+            std::cout << "[WARNING] Query too long. Truncating to first 10 words." << endl;
         tokens.resize(10);
-    }
+    } // need to mudularise code
 
     vector<int> matched_docs;
 
     // Safely load the first word's documents using .count() and .at()
-    if (global_index.count(tokens[0])) {
-        for (auto &occ : global_index.at(tokens[0])) {
+    if (global_index.count(tokens[0]))
+    { // there are too many checks to avoid error,
+        // question 1, logically is it even possible for some checks to get bypassed gien they werent present,
+        // question two, how can one know which chcek failed and made code skip some critical lines/fucntion
+        for (auto &occ : global_index.at(tokens[0]))
+        {
             matched_docs.push_back(occ.docID);
         }
     }
 
-    for (size_t i = 1; i < tokens.size(); i++) {
-        if (matched_docs.empty() && !is_or_query) break;
+    for (size_t i = 1; i < tokens.size(); i++)
+    {
+        if (matched_docs.empty() && !is_or_query)
+            break; // matche_empty seems unnecsary check since , no its nice, if token[0] dindt exist in corpus its instant exit for AND
 
-        if (is_or_query) {
-            if (global_index.count(tokens[i])) {
+        if (is_or_query)
+        {
+            if (global_index.count(tokens[i]))
+            {
                 matched_docs = union_docs(matched_docs, global_index.at(tokens[i]));
             }
-        } else {
-            if (global_index.count(tokens[i])) {
+        }
+        else
+        {
+            if (global_index.count(tokens[i]))
+            {
                 matched_docs = intersect(matched_docs, global_index.at(tokens[i]));
-            } else {
+            }
+            else
+            {
                 matched_docs.clear(); // Word doesn't exist, AND query instantly fails
                 break;
             }
         }
+
+        // If it's a strict query, filter the matched_docs by absolute positions!
+    } // whats the overhaead or say load of the function that calculates the hyte differenec of the corpus, and how it knows the last size of corpus??
+    if (is_strict_query)
+    {
+        matched_docs = filter_strict_phrase(matched_docs, tokens, global_index);
     }
-    
-    if (matched_docs.empty()) {
-        if (!silent) cout << "No matching documents found.\n";
+    if (matched_docs.empty())
+    {
+        if (!silent)
+            cout << "No matching documents found. Please ensure the typed spelling is correct." << endl;
         return;
     }
 
     double avg_doc_len = 0.0;
-    for (const int &x : doc_length) avg_doc_len += x;
+    for (const int &x : doc_length)
+        avg_doc_len += x;
     avg_doc_len /= (double)doc_length.size();
 
-    double k1 = 1.2;              
-    double b = 0.75;              
-    double N_docs = doc_length.size(); 
+    double k1 = 1.2;
+    double b = 0.75;
+    double N_docs = doc_length.size();
 
     priority_queue<pair<double, int>, vector<pair<double, int>>, greater<pair<double, int>>> top_k_queue;
-    int MAX_RESULTS = 50; 
+    int MAX_RESULTS = 50;
 
     for (int docID : matched_docs)
     {
@@ -254,7 +416,8 @@ void search(string query, bool silent=false)
 
         for (string q : tokens)
         {
-            if (!global_index.count(q)) continue; // Memory safety
+            if (!global_index.count(q))
+                continue; // Memory safety// sagar: its understandable here, since tokesn is user input just parsed
 
             double n_q = global_index.at(q).size();
             double idf = log((N_docs - n_q + 0.5) / (n_q + 0.5) + 1.0);
@@ -262,9 +425,10 @@ void search(string query, bool silent=false)
             double f_q_D = 0.0;
             for (auto &occ : global_index.at(q))
             {
-                if (occ.docID == docID) {
-                    f_q_D = occ.total_frequency; 
-                    break; 
+                if (occ.docID == docID)
+                {
+                    f_q_D = occ.total_frequency;
+                    break;
                 }
             }
 
@@ -275,16 +439,18 @@ void search(string query, bool silent=false)
         }
 
         double slop_multiplier = calculate_slop_multiplier(docID, tokens);
-        total_score *= slop_multiplier; 
+        total_score *= slop_multiplier;
 
         top_k_queue.push({total_score, docID});
-        if (top_k_queue.size() > MAX_RESULTS) {
-            top_k_queue.pop(); 
+        if (top_k_queue.size() > MAX_RESULTS)
+        {
+            top_k_queue.pop();
         }
     }
 
     vector<pair<double, int>> doc_scores;
-    while (!top_k_queue.empty()) {
+    while (!top_k_queue.empty())
+    {
         doc_scores.push_back(top_k_queue.top());
         top_k_queue.pop();
     }
@@ -294,81 +460,334 @@ void search(string query, bool silent=false)
     auto duration = chrono::duration_cast<chrono::microseconds>(end_time - start_time);
 
     // [SHORT CIRCUIT FOR BENCHMARKS]
-    if (silent) {
-        return; 
+    if (silent)
+    {
+        return;
     }
 
-    // 5. Pagination UI & Linker (All redundant `if (!silent)` removed from here down)
-    cout << "\n--- Top " << doc_scores.size() << " Search Results ---\n";
-    
+    // 5. Pagination UI & Linker
+    cout << "\n--- Top " << doc_scores.size() << " Search Results ---\n"
+         << endl;
+
     int PAGE_SIZE = 10;
     int current_index = 0;
     string user_input = "";
 
-    while (current_index < doc_scores.size()) {
+    while (current_index < doc_scores.size())
+    {
         int end_index = min(current_index + PAGE_SIZE, (int)doc_scores.size());
 
-        for (int i = current_index; i < end_index; i++) {
+        for (int i = current_index; i < end_index; i++)
+        {
             int docID = doc_scores[i].second;
             double score = doc_scores[i].first;
             string file_path = ID_allocator[docID];
 
             unordered_map<int, int> page_hits;
-            for (string q : tokens) {
-                if (!global_index.count(q)) continue;
-                for (auto &occ : global_index.at(q)) {
-                    if (occ.docID == docID) {
-                        for (auto const& [page, pos_list] : occ.page_positions) {
-                            page_hits[page] += pos_list.size();
+            // STRICT PAGE SCORING: Only reward pages that contain the exact phrase!
+            if (is_strict_query && tokens.size() >= 2)
+            {
+                if (global_index.count(tokens[0]))
+                {
+                    const Occurrence *first_occ = nullptr;
+                    for (const auto &o : global_index.at(tokens[0]))
+                    {
+                        if (o.docID == docID)
+                        {
+                            first_occ = &o;
+                            break;
                         }
-                        break; 
+                    }
+
+                    if (first_occ)
+                    {
+                        for (auto const &[page, positions] : first_occ->page_positions)
+                        {
+                            int strict_hits = 0;
+                            for (int start_pos : positions)
+                            {
+                                bool sequence_valid = true;
+                                for (size_t j = 1; j < tokens.size(); j++)
+                                {
+                                    if (!global_index.count(tokens[j]))
+                                    {
+                                        sequence_valid = false;
+                                        break;
+                                    }
+                                    const Occurrence *next_occ = nullptr;
+                                    for (const auto &o : global_index.at(tokens[j]))
+                                    {
+                                        if (o.docID == docID)
+                                        {
+                                            next_occ = &o;
+                                            break;
+                                        }
+                                    }
+
+                                    if (!next_occ || !next_occ->page_positions.count(page))
+                                    {
+                                        sequence_valid = false;
+                                        break;
+                                    }
+
+                                    const auto &next_positions = next_occ->page_positions.at(page);
+                                    if (std::find(next_positions.begin(), next_positions.end(), start_pos + j) == next_positions.end())
+                                    {
+                                        sequence_valid = false;
+                                        break;
+                                    }
+                                }
+                                if (sequence_valid)
+                                    strict_hits++;
+                            }
+                            if (strict_hits > 0)
+                            {
+                                page_hits[page] = strict_hits;
+                            }
+                        }
+                    }
+                }
+            }
+            // NORMAL PAGE SCORING
+            else
+            {
+                for (string q : tokens)
+                {
+                    if (!global_index.count(q))
+                        continue;
+                    for (auto &occ : global_index.at(q))
+                    {
+                        if (occ.docID == docID)
+                        {
+                            for (auto const &[page, pos_list] : occ.page_positions)
+                            {
+                                page_hits[page] += pos_list.size();
+                            }
+                            break;
+                        }
                     }
                 }
             }
 
-            int best_page = 999999; 
-            int max_hits = -1;
+            int best_page = 999999;
+            int max_hits = -1; // illogical; why not 0? i dont want 0 hit page, seems useless
             vector<int> all_pages;
-            
-            for (auto const& [page, hits] : page_hits) {
+
+            for (auto const &[page, hits] : page_hits)
+            { // this seems redundant, why to make map for this, why not do it directly? a possible explanation can be that
+                //[page] are repeative
                 all_pages.push_back(page);
-                if (hits > max_hits || (hits == max_hits && page < best_page)) {
+                if (hits > max_hits || (hits == max_hits && page < best_page))
+                {
                     max_hits = hits;
                     best_page = page;
                 }
             }
-            
-            all_pages.erase(std::remove(all_pages.begin(), all_pages.end(), best_page), all_pages.end());
+
+            all_pages.erase(std::remove(all_pages.begin(), all_pages.end(), best_page), all_pages.end()); // whats its doing? are we removing bets page? why?
 
             string filename = fs::path(file_path).filename().string();
-            cout << i + 1 << ". " << filename << " (Score: " << score << ")\n";
-            
-            if (best_page != 999999) {
-                cout << "   ↳ Best Match: Open directly to Page " << best_page 
-                     << " (file://" << file_path << ")\n";
+            cout << "\n"
+                 << i + 1 << ". " << filename << " (Score: " << score << ")" << endl;
+            string file_pdf = filename;
+            file_pdf = file_pdf.substr(0, file_pdf.size() - 4);
+            if (best_page != 999999)
+            {
+                cout << "   ↳ Best Match-> Page: " << best_page << endl;
             }
-            
-            if (!all_pages.empty()) {
+
+            if (!all_pages.empty())
+            {
                 cout << "   ↳ Also mentioned on pages: ";
-                int max_pages_to_show = min(5, (int)all_pages.size()); 
-                for (int p = 0; p < max_pages_to_show; p++) {
+                int max_pages_to_show = min(5, (int)all_pages.size());
+                for (int p = 0; p < max_pages_to_show; p++)
+                {
                     cout << all_pages[p] << (p == max_pages_to_show - 1 ? "" : ", ");
                 }
-                if (all_pages.size() > 5) cout << "...";
-                cout << "\n";
+                if (all_pages.size() > 5)
+                    cout << "...";
+                cout << "" << endl;
             }
         }
 
         current_index += PAGE_SIZE;
 
-        if (current_index < doc_scores.size()) {
+        if (current_index < doc_scores.size())
+        {
             cout << "\n[Press ENTER to show next 10 results, or type 'q' to start a new search] ";
             getline(cin, user_input);
-            if (user_input == "q" || user_input == "Q") break;
+            if (user_input == "q" || user_input == "Q")
+                break;
         }
     }
-    cout << "------------------------------\n";
-    cout << "Search latency: " << duration.count() / 1000.0 << " ms\n";
+    cout << "------------------------------" << endl;
+    cout << "Search latency: " << duration.count() / 1000.0 << " ms\n\n"
+         << endl;
+}
+
+// stage 6
+//  Calculates the total byte size of the corpus folder to detect changes
+size_t get_corpus_hash(const string &corpus_path)
+{
+    size_t total_bytes = 0;
+    for (const auto &file : fs::directory_iterator(corpus_path))
+    {
+        if (file.is_regular_file())
+        {
+            total_bytes += fs::file_size(file.path());
+        }
+    }
+    return total_bytes;
+}
+bool save_index(const string &filename, size_t corpus_hash)
+{
+    ofstream out(filename, ios::binary);
+    if (!out)
+        return false;
+
+    // --- WRITE THE CORPUS HASH FIRST ---
+    out.write((char *)&corpus_hash, sizeof(corpus_hash));
+
+    // ---------- ID_allocator ----------
+    size_t docs = ID_allocator.size();
+    out.write((char *)&docs, sizeof(docs));
+
+    for (const auto &name : ID_allocator)
+    {
+        size_t len = name.size();
+        out.write((char *)&len, sizeof(len));
+        out.write(name.data(), len);
+    }
+
+    // ---------- doc_length ----------
+    size_t dl = doc_length.size();
+    out.write((char *)&dl, sizeof(dl));
+    out.write((char *)doc_length.data(), dl * sizeof(int));
+
+    // ---------- global_index ----------
+    size_t words = global_index.size();
+    out.write((char *)&words, sizeof(words));
+
+    for (const auto &[word, occurrences] : global_index)
+    {
+        size_t wordLen = word.size();
+        out.write((char *)&wordLen, sizeof(wordLen));
+        out.write(word.data(), wordLen);
+
+        size_t occCount = occurrences.size();
+        out.write((char *)&occCount, sizeof(occCount));
+
+        for (const auto &occ : occurrences)
+        {
+            out.write((char *)&occ.docID, sizeof(int));
+            out.write((char *)&occ.total_frequency, sizeof(int));
+
+            size_t pageCount = occ.page_positions.size();
+            out.write((char *)&pageCount, sizeof(pageCount));
+
+            for (const auto &[page, positions] : occ.page_positions)
+            {
+                out.write((char *)&page, sizeof(int));
+
+                size_t posCount = positions.size();
+                out.write((char *)&posCount, sizeof(posCount));
+
+                out.write((char *)positions.data(),
+                          posCount * sizeof(int));
+            }
+        }
+    }
+
+    return true;
+}
+
+// stage 6
+
+bool load_index(const string &filename)
+{
+    ifstream in(filename, ios::binary);
+
+    if (!in)
+        return false;
+    // --- READ AND SKIP THE CORPUS HASH ---
+    size_t dummy_hash;
+    in.read((char *)&dummy_hash, sizeof(dummy_hash));
+
+    global_index.clear();
+    ID_allocator.clear();
+    doc_length.clear();
+
+    // ---------- ID_allocator ----------
+    size_t docs;
+    in.read((char *)&docs, sizeof(docs));
+
+    ID_allocator.resize(docs);
+
+    for (size_t i = 0; i < docs; i++)
+    {
+        size_t len;
+        in.read((char *)&len, sizeof(len));
+
+        ID_allocator[i].resize(len);
+        in.read(&ID_allocator[i][0], len);
+    }
+
+    // ---------- doc_length ----------
+    size_t dl;
+    in.read((char *)&dl, sizeof(dl));
+
+    doc_length.resize(dl);
+    in.read((char *)doc_length.data(), dl * sizeof(int));
+
+    // ---------- global_index ----------
+    size_t words;
+    in.read((char *)&words, sizeof(words));
+
+    for (size_t i = 0; i < words; i++)
+    {
+        size_t wordLen;
+        in.read((char *)&wordLen, sizeof(wordLen));
+
+        string word(wordLen, '\0');
+        in.read(&word[0], wordLen);
+
+        size_t occCount;
+        in.read((char *)&occCount, sizeof(occCount));
+
+        vector<Occurrence> occs;
+
+        for (size_t j = 0; j < occCount; j++)
+        {
+            Occurrence occ;
+
+            in.read((char *)&occ.docID, sizeof(int));
+            in.read((char *)&occ.total_frequency, sizeof(int));
+
+            size_t pageCount;
+            in.read((char *)&pageCount, sizeof(pageCount));
+
+            for (size_t k = 0; k < pageCount; k++)
+            {
+                int page;
+                in.read((char *)&page, sizeof(int));
+
+                size_t posCount;
+                in.read((char *)&posCount, sizeof(posCount));
+
+                vector<int> positions(posCount);
+                in.read((char *)positions.data(),
+                        posCount * sizeof(int));
+
+                occ.page_positions[page] = move(positions);
+            }
+
+            occs.push_back(move(occ));
+        }
+
+        global_index[word] = move(occs);
+    }
+
+    return true;
 }
 
 // ==========================================
@@ -378,111 +797,221 @@ int main(int argc, char *argv[])
 {
     if (argc < 2)
     {
-        cout << "ERROR: Please enter corpus path.\n";
+        cout << "ERROR: Please enter corpus path." << endl;
         return 1;
     }
-
     string corpus_path = argv[1];
-    cout << "Building Positional Index from: " << corpus_path << "...\n";
+    string index_file = "core_index.dat";
+    long long total_indx_words = 0;
+    long long total_pages = 0;
+    auto verify_start = chrono::steady_clock::now();
 
-    for (const auto &file : dir_itr(corpus_path))
+    // Get the real-time byte size of the corpus folder
+    size_t current_hash = get_corpus_hash(corpus_path);
+    bool rebuild_needed = true;
+
+    // STAGE 6: Check for a valid, up-to-date binary index
+    if (fs::exists(index_file))
     {
-        int fileID = ID_allocator.size();
-        ID_allocator.push_back(file.path().string());
-
-        std::ifstream in_file(file.path().string());
-
-        if (in_file.is_open())
+        size_t cached_hash = 0;
+        ifstream in(index_file, ios::binary);
+        if (in)
         {
-            int total_words = 0;
-            string raw_word;
-            
-            unordered_map<string, Occurrence> local_word_tracker;
-            int current_page_number = 1;
-            int absolute_word_position = 0; 
+            in.read((char *)&cached_hash, sizeof(cached_hash));
+            in.close();
+        }
 
-            while (in_file >> raw_word)
+        if (cached_hash == current_hash)
+        {
+            auto verify_end = chrono::steady_clock::now();
+            auto verify_dur = chrono::duration_cast<chrono::milliseconds>(verify_end - verify_start);
+            cout << "\n-> Successfully Cache Verified in " << verify_dur.count() << " ms.\n"
+                 << endl;
+            cout << "\n\n[System] Cache is up-to-date. Bypassing text parser..." << endl;
+            auto load_start = chrono::steady_clock::now();
+            if (load_index(index_file))
             {
-                if (raw_word.find('\f') != string::npos) {
-                    current_page_number++;
-                    absolute_word_position = 0; 
-                    raw_word.erase(std::remove(raw_word.begin(), raw_word.end(), '\f'), raw_word.end());
-                }
-
-                std::replace(raw_word.begin(), raw_word.end(), '-', ' ');
-                stringstream word_ss(raw_word);
-                string word;
-                
-                while (word_ss >> word) 
-                {
-                    word.erase(std::remove_if(word.begin(), word.end(), ::ispunct), word.end());
-                    std::transform(word.begin(), word.end(), word.begin(), [](unsigned char c) { return std::tolower(c); });
-                    if (stop_words.count(word)) continue;
-
-                    if (!word.empty())
-                    {
-                        absolute_word_position++;
-                        total_words++;
-
-                        if (local_word_tracker[word].total_frequency == 0) {
-                            local_word_tracker[word].docID = fileID;
-                        }
-                        
-                        local_word_tracker[word].total_frequency++;
-                        local_word_tracker[word].page_positions[current_page_number].push_back(absolute_word_position);
-                    }
-                }
+                rebuild_needed = false;
+                auto load_end = chrono::steady_clock::now();
+                auto load_dur = chrono::duration_cast<chrono::milliseconds>(load_end - load_start);
+                cout << "\n-> Successfully loaded " << doc_length.size() << " documents from cache in " << load_dur.count() << " ms.\n"
+                     << endl;
             }
-
-            doc_length.push_back(total_words);
-
-            for (const auto &[per_word, occ_data] : local_word_tracker)
-            {
-                global_index[per_word].push_back(occ_data);
-            }
+        }
+        else
+        {
+            cout << "\n\n[System] Corpus changes detected! Invalidating stale cache..." << endl;
+            auto verify_end = chrono::steady_clock::now();
+            auto verify_dur = chrono::duration_cast<chrono::milliseconds>(verify_end - verify_start);
+            cout << "\n-> Cache Verification Failed in " << verify_dur.count() << " ms.\n"
+                 << endl;
         }
     }
 
-    cout << "Index successfully built! Loaded " << doc_length.size() << " documents.\n\n";
+    if (rebuild_needed)
+    {
+        cout << "Building Positional Index from scratch: " << corpus_path << "..." << endl;
+        auto build_start = chrono::steady_clock::now();
+        for (const auto &file : dir_itr(corpus_path))
+        {
+            int fileID = ID_allocator.size();
+            ID_allocator.push_back(file.path().string());
+
+            std::ifstream in_file(file.path().string());
+
+            if (in_file.is_open())
+            {
+                int total_words = 0;
+                unordered_map<string, Occurrence> local_word_tracker; // need more infor about local word tracker
+
+                int current_page_number = 1;
+                int absolute_word_position = 0;
+
+                // FIX: Read line-by-line to preserve the '\f' character!
+                string line;
+                while (getline(in_file, line))
+                {
+                    // 1. Page Tracking Logic (Catch \f anywhere in the line)
+                    if (line.find('\f') != string::npos)
+                    {
+                        current_page_number++;
+                        total_pages++;
+                        absolute_word_position = 0; // the plan was to not reset word position after next page
+                        line.erase(std::remove(line.begin(), line.end(), '\f'), line.end());
+                    }
+
+                    // 2. Prepare the line for word extraction
+                    std::replace(line.begin(), line.end(), '-', ' ');
+                    stringstream line_ss(line);
+                    string raw_word;
+
+                    // 3. Extract word by word from the cleaned line
+                    while (line_ss >> raw_word)
+                    {
+                        // FIX 2: Strip ALL non-alphanumeric characters (Destroys Unicode/OCR garbage)
+                        raw_word.erase(std::remove_if(raw_word.begin(), raw_word.end(), [](unsigned char c)
+                                                      { return !std::isalnum(c); }),
+                                       raw_word.end());
+
+                        std::transform(raw_word.begin(), raw_word.end(), raw_word.begin(), [](unsigned char c)
+                                       { return std::tolower(c); });
+
+                        if (stop_words.count(raw_word))
+                            continue;
+
+                        if (!raw_word.empty())
+                        {
+                            total_indx_words++;
+                            absolute_word_position++;
+                            total_words++;
+
+                            if (local_word_tracker[raw_word].total_frequency == 0)
+                            {
+                                local_word_tracker[raw_word].docID = fileID;
+                            }
+
+                            local_word_tracker[raw_word].total_frequency++;
+                            local_word_tracker[raw_word].page_positions[current_page_number].push_back(absolute_word_position);
+                        }
+                    }
+                }
+
+                doc_length.push_back(total_words);
+
+                for (const auto &[per_word, occ_data] : local_word_tracker)
+                {
+                    global_index[per_word].push_back(occ_data);
+                }
+            }
+        }
+
+        // STAGE 6: Save the completed index to disk so we never have to do this again
+        auto build_end = chrono::steady_clock::now();
+        auto build_dur = chrono::duration_cast<chrono::milliseconds>(build_end - build_start);
+        cout << "\n-> Successfully build Index of  " << doc_length.size() << " documents in " << build_dur.count() << " ms from scratch.\n"
+             << endl;
+        cout << "\n[System] Parsing complete. Serializing index to disk..." << endl;
+        // cout << "-> Successfully loaded " << doc_length.size() << endl;
+        // cout<<"\nTime taken from creaing new Index, and serializing it to disk: "<<boot_dur.count() << " ms.\n"<< endl;
+        auto saved_start = chrono::steady_clock::now();
+        save_index(index_file, get_corpus_hash(corpus_path));
+        auto saved_end = chrono::steady_clock::now();
+        auto saved_dur = chrono::duration_cast<chrono::milliseconds>(saved_end - saved_start);
+        cout << "\n-> Successfully Serialized Index of " << doc_length.size() << " documents in " << saved_dur.count() << " ms from scratch.\n"
+             << endl;
+    }
+    // need to remove all letter that are not simply english or numbers from text, or like  not parse  them
+    cout << "Index successfully built! Loaded " << doc_length.size() << " documents.\n"
+         << endl;
+    cout << "Total indexed size: " << fs::file_size(index_file)<< "\n"
+         << endl;
+    cout << "Total indexed words indexed: " << total_indx_words << "\n"
+         << endl;
+    cout << "Total pages in index: " << total_pages << "\n"
+         << endl;
+    cout << "Total unique words indexed: " << global_index.size() << "\n"
+         << endl;
+    cout << "Welcome User! SearchCore is a file search engine, supporying AND/OR boolean logic.\nBY default all search queries are case insensitive and will be processed in AND logic.\nTo use OR logic, use 'or:' in the beggining of your search query\nTo use Exact Phrase Search, use 'strict:' in the beggining of your search query\n"
+         << endl;
 
     string user_query;
     while (true)
     {
         cout << "Enter search query (or type 'exit' to quit): ";
         getline(cin, user_query);
-        
-        if (user_query == "!benchmark") {
-            cout << "\n[System] Initiating 1,000-query benchmark test...\n";
-            
+
+        if (user_query == "!benchmark")
+        {
+            cout << "\n[System] Initiating 1,000-query benchmark test...\n"
+                 << endl;
+
             vector<string> all_words;
-            for (const auto& [word, occ] : global_index) {
+            for (const auto &[word, occ] : global_index)
+            {
                 all_words.push_back(word);
             }
-            
-            if (all_words.empty()) continue;
+
+            if (all_words.empty())
+                continue; // means if global index is empty no?
 
             auto total_start = chrono::steady_clock::now();
-            int num_queries = 1000;
+            // will run 1000 queries like 200 for one word, 200 for 3 word, and 600 for 2 word
 
-            for (int i = 0; i < num_queries; i++) {
-                string random_q = all_words[rand() % all_words.size()] + " " + 
+            for (int i = 0; i < 200; i++)
+            {
+                string random_q = all_words[rand() % all_words.size()];
+                search(random_q, true); // are we only gonna test on 100? 2 words?
+            }
+            for (int i = 0; i < 600; i++)
+            {
+                string random_q = all_words[rand() % all_words.size()] + " " +
                                   all_words[rand() % all_words.size()];
-                search(random_q, true); 
+                search(random_q, true); // are we only gonna test on 100? 2 words?
+            }
+            for (int i = 0; i < 200; i++)
+            {
+                string random_q = all_words[rand() % all_words.size()] + " " +
+                                  all_words[rand() % all_words.size()] + " " +
+                                  all_words[rand() % all_words.size()];
+                search(random_q, true); // are we only gonna test on 100? 2 words?
             }
 
             auto total_end = chrono::steady_clock::now();
             auto total_duration = chrono::duration_cast<chrono::microseconds>(total_end - total_start);
-            
-            double avg_latency_ms = (total_duration.count() / 1000.0) / num_queries;
-            
-            cout << "[System] Benchmark Complete!\n";
-            cout << "-> Total Time for " << num_queries << " queries: " << total_duration.count() / 1000.0 << " ms\n";
-            cout << "-> Average Latency: " << avg_latency_ms << " ms per query\n\n";
+
+            double avg_latency_ms = (total_duration.count() / 1000.0) / 1000;
+
+            cout << "[System] Benchmark Complete!" << endl;
+            cout << "-> Total Time for " << 1000 << " queries: " << total_duration.count() / 1000.0 << " ms" << endl;
+            cout << "-> Average Latency: " << avg_latency_ms << " ms per query\n"
+                 << endl;
             continue;
         }
 
-        if (user_query == "exit") break;
-        if (user_query.empty()) continue;
+        if (user_query == "exit")
+            break;
+        if (user_query.empty())
+            continue;
 
         search(user_query);
     }
