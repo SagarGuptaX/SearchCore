@@ -58,6 +58,8 @@ struct Occurrence
 unordered_map<string, vector<Occurrence>> global_index;
 vector<string> ID_allocator; // why  using id instead fo direct path directly?
 vector<int> doc_length;
+long long total_indx_words = 0;
+long long total_pages = 0;
 
 // ==========================================
 // STAGE 2: O(N) TWO-POINTER INTERSECTION sagar: can we do better somehow??
@@ -408,7 +410,7 @@ void search(string query, bool silent = false)
     double N_docs = doc_length.size();
 
     priority_queue<pair<double, int>, vector<pair<double, int>>, greater<pair<double, int>>> top_k_queue;
-    int MAX_RESULTS = 50;
+    int MAX_RESULTS = 25;
 
     for (int docID : matched_docs)
     {
@@ -648,6 +650,10 @@ bool save_index(const string &filename, size_t corpus_hash)
     // --- WRITE THE CORPUS HASH FIRST ---
     out.write((char *)&corpus_hash, sizeof(corpus_hash));
 
+    // --- WRITE METRICS ---
+    out.write((char *)&total_pages, sizeof(total_pages));
+    out.write((char *)&total_indx_words, sizeof(total_indx_words));
+
     // ---------- ID_allocator ----------
     size_t docs = ID_allocator.size();
     out.write((char *)&docs, sizeof(docs));
@@ -716,7 +722,9 @@ bool load_index(const string &filename)
     global_index.clear();
     ID_allocator.clear();
     doc_length.clear();
-
+    // --- READ METRICS ---
+    in.read((char *)&total_pages, sizeof(total_pages));
+    in.read((char *)&total_indx_words, sizeof(total_indx_words));
     // ---------- ID_allocator ----------
     size_t docs;
     in.read((char *)&docs, sizeof(docs));
@@ -802,8 +810,6 @@ int main(int argc, char *argv[])
     }
     string corpus_path = argv[1];
     string index_file = "core_index.dat";
-    long long total_indx_words = 0;
-    long long total_pages = 0;
     auto verify_start = chrono::steady_clock::now();
 
     // Get the real-time byte size of the corpus folder
@@ -824,17 +830,17 @@ int main(int argc, char *argv[])
         if (cached_hash == current_hash)
         {
             auto verify_end = chrono::steady_clock::now();
-            auto verify_dur = chrono::duration_cast<chrono::milliseconds>(verify_end - verify_start);
-            cout << "\n-> Successfully Cache Verified in " << verify_dur.count() << " ms.\n"
+            auto verify_dur = chrono::duration_cast<chrono::microseconds>(verify_end - verify_start);
+            cout << "\n-> Successfully Cache Verified in " << verify_dur.count()/1000.0 << " ms.\n"
                  << endl;
-            cout << "\n\n[System] Cache is up-to-date. Bypassing text parser..." << endl;
+            cout << "\n[System] Cache is up-to-date. Bypassing text parser..." << endl;
             auto load_start = chrono::steady_clock::now();
             if (load_index(index_file))
             {
                 rebuild_needed = false;
                 auto load_end = chrono::steady_clock::now();
-                auto load_dur = chrono::duration_cast<chrono::milliseconds>(load_end - load_start);
-                cout << "\n-> Successfully loaded " << doc_length.size() << " documents from cache in " << load_dur.count() << " ms.\n"
+                auto load_dur = chrono::duration_cast<chrono::microseconds>(load_end - load_start);
+                cout << "\n-> Successfully loaded " << doc_length.size() << " documents from cache in " << load_dur.count() / 1000.0 << " ms.\n"
                      << endl;
             }
         }
@@ -842,8 +848,8 @@ int main(int argc, char *argv[])
         {
             cout << "\n\n[System] Corpus changes detected! Invalidating stale cache..." << endl;
             auto verify_end = chrono::steady_clock::now();
-            auto verify_dur = chrono::duration_cast<chrono::milliseconds>(verify_end - verify_start);
-            cout << "\n-> Cache Verification Failed in " << verify_dur.count() << " ms.\n"
+            auto verify_dur = chrono::duration_cast<chrono::microseconds>(verify_end - verify_start);
+            cout << "\n-> Cache Verification Failed in " << verify_dur.count() / 1000.0 << " ms.\n"
                  << endl;
         }
     }
@@ -927,8 +933,8 @@ int main(int argc, char *argv[])
 
         // STAGE 6: Save the completed index to disk so we never have to do this again
         auto build_end = chrono::steady_clock::now();
-        auto build_dur = chrono::duration_cast<chrono::milliseconds>(build_end - build_start);
-        cout << "\n-> Successfully build Index of  " << doc_length.size() << " documents in " << build_dur.count() << " ms from scratch.\n"
+        auto build_dur = chrono::duration_cast<chrono::microseconds>(build_end - build_start);
+        cout << "\n-> Successfully build Index of  " << doc_length.size() << " documents in " << build_dur.count()/1000.0 << " ms from scratch.\n"
              << endl;
         cout << "\n[System] Parsing complete. Serializing index to disk..." << endl;
         // cout << "-> Successfully loaded " << doc_length.size() << endl;
@@ -936,22 +942,25 @@ int main(int argc, char *argv[])
         auto saved_start = chrono::steady_clock::now();
         save_index(index_file, get_corpus_hash(corpus_path));
         auto saved_end = chrono::steady_clock::now();
-        auto saved_dur = chrono::duration_cast<chrono::milliseconds>(saved_end - saved_start);
-        cout << "\n-> Successfully Serialized Index of " << doc_length.size() << " documents in " << saved_dur.count() << " ms from scratch.\n"
+        auto saved_dur = chrono::duration_cast<chrono::microseconds>(saved_end - saved_start);
+        cout << "\n-> Successfully Serialized Index of " << doc_length.size() << " documents in " << saved_dur.count()/1000.0 << " ms from scratch.\n"
              << endl;
     }
     // need to remove all letter that are not simply english or numbers from text, or like  not parse  them
+    double mb = fs::file_size(index_file) / (1024.0 * 1024.0); // its in mebibyte
+
     cout << "Index successfully built! Loaded " << doc_length.size() << " documents.\n"
          << endl;
-    cout << "Total indexed size: " << fs::file_size(index_file)<< "\n"
+    cout << fixed << setprecision(2)
+         << "Corpus size: " << mb << " MiB\n"
          << endl;
-    cout << "Total indexed words indexed: " << total_indx_words << "\n"
+    cout << "Total indexed tokens: " << total_indx_words << "\n"
          << endl;
-    cout << "Total pages in index: " << total_pages << "\n"
+    cout << "Total pages: " << total_pages << "\n"
          << endl;
-    cout << "Total unique words indexed: " << global_index.size() << "\n"
+    cout << "Total unique tokens: " << global_index.size() << "\n"
          << endl;
-    cout << "Welcome User! SearchCore is a file search engine, supporying AND/OR boolean logic.\nBY default all search queries are case insensitive and will be processed in AND logic.\nTo use OR logic, use 'or:' in the beggining of your search query\nTo use Exact Phrase Search, use 'strict:' in the beggining of your search query\n"
+    cout << "Welcome User! SearchCore is a file search engine, supporting AND/OR boolean logic.\nBY default all search queries are case insensitive and will be processed in AND logic.\nTo use OR logic, use 'or:' in the beggining of your search query.\nTo use Exact Phrase Search, use 'strict:' in the beggining of your search query.\n"
          << endl;
 
     string user_query;
