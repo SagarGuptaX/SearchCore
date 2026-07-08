@@ -3,68 +3,49 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
-#include <filesystem> //uses of below marked libraries
-#include <fstream>    //
-#include <sstream>    //
-#include <algorithm>  //
-#include <cmath>      //
+#include <filesystem> 
+#include <fstream>    
+#include <sstream>    
+#include <algorithm>  
+#include <cmath>      
 #include <queue>
-#include <cstdlib> //
-#include <chrono>  // For profiling our engine's speed
+#include <cstdlib> 
+#include <chrono>  
 
 using namespace std;
 namespace fs = std::filesystem;
 using dir_itr = std::filesystem::directory_iterator;
 
-// ==========================================
-// STOP WORDS DICTIONARY (Domain-Specific)
-// ==========================================
-unordered_set<string> stop_words = {
-    // PFC specifuc words; sagar
+unordered_set<string> stop_words = {//stop words
     "website", "pfcindia", "co", "in", "cin", "l65910dl1986goi024862", "urjanidhi", "barakhamba", "connaught", "tel", "email",
-
-    // Legal boilerplate — very high frequency, low value
     "hereby", "herein", "thereof", "thereto", "therein", "hereunder",
     "whereas", "pursuant", "aforesaid", "aforementioned", "hereinafter",
     "notwithstanding", "thereupon", "heretofore",
-    // Articles & Determiners
     "the", "a", "an", "this", "that", "these", "those", "each", "every", "all", "any",
-    // Prepositions
     "of", "to", "in", "for", "on", "at", "by", "from", "with", "into", "about",
     "upon", "under", "over", "between", "through", "against", "during", "within",
-    // Conjunctions
     "and", "or", "but", "so", "if", "as", "than", "nor",
-    // Verbs (auxiliary / linking)
     "is", "are", "was", "were", "be", "been", "being",
     "has", "have", "had", "do", "did", "does", "will", "would",
     "may", "can", "shall", "should", "could", "might",
-    // Pronouns
     "it", "its", "we", "our", "they", "their", "he", "she", "you", "i",
-    // Common adverbs / others
     "not", "no", "also", "such", "more", "other", "said", "up", "out", "then",
     "than", "however"};
-
-// ==========================================
-// GLOBAL ARCHITECTURE (Positional V2)
-// ==========================================
 
 struct Occurrence
 {
     int docID;
     int total_frequency;
-    unordered_map<int, vector<int>> page_positions;
+    unordered_map<int, vector<int>> page_positions;// this can be made into vector of vectors, since docid are in order
 };
 
 unordered_map<string, vector<Occurrence>> global_index;
-vector<string> ID_allocator; // why  using id instead fo direct path directly?
+vector<string> ID_allocator;
 vector<int> doc_length;
 long long total_indx_words = 0;
 long long total_pages = 0;
 
-// ==========================================
-// STAGE 2: O(N) TWO-POINTER INTERSECTION sagar: can we do better somehow??
-// ==========================================
-vector<int> intersect(const vector<Occurrence> &list1, const vector<Occurrence> &list2)
+vector<int> intersect(const vector<Occurrence> &list1, const vector<Occurrence> &list2)//AND
 {
     vector<int> matched_docs;
     int i = 0, j = 0;
@@ -145,7 +126,7 @@ vector<int> filter_strict_phrase(const vector<int> &matched_docs, const vector<s
 
         // Grab the positional data for the first word
         const Occurrence *first_occ = nullptr;
-        for (const auto &o : index.at(tokens[0]))
+        for (const auto &o : index.at(tokens[0]))//why from token[0]? wouldnt it be already processed in intersect? shouldnt we stat from indx 1?
         {
             if (o.docID == docID)
             {
@@ -176,7 +157,7 @@ vector<int> filter_strict_phrase(const vector<int> &matched_docs, const vector<s
                         }
                     }
 
-                    if (!next_occ || !next_occ->page_positions.count(page))
+                    if (!next_occ || !next_occ->page_positions.count(page))//||!next_occ->page_positions.count(page+1))// i added the third boolean
                     {
                         sequence_valid = false;
                         break;
@@ -189,7 +170,12 @@ vector<int> filter_strict_phrase(const vector<int> &matched_docs, const vector<s
                         sequence_valid = false;
                         break;
                     }
+                    // if(next_occ && !next_occ->page_positions.count(page)&&next_occ->page_positions.count(page+1)){
+                    //     const auto &next_positions = next_occ->page_positions.at(page+1);
+                    // }
                 }
+
+                
 
                 if (sequence_valid)
                 {
@@ -212,12 +198,12 @@ vector<int> filter_strict_phrase(const vector<int> &matched_docs, const vector<s
 double calculate_slop_multiplier(int docID, const vector<string> &tokens)
 { // sagar: need to make a table of reward points per situation
     if (tokens.size() < 2)
-        return 1.0;
+        return 1.0;//
 
     double total_multiplier = 1.0;
 
     for (size_t i = 0; i < tokens.size() - 1; i++)
-    { // sagar: any particular precaustion we are using unsiggned int?
+    {
         string word1 = tokens[i];
         string word2 = tokens[i + 1]; // taking two words since we are claculating slop for two adjacent words
 
@@ -235,7 +221,7 @@ double calculate_slop_multiplier(int docID, const vector<string> &tokens)
                 occ1 = &o;
                 break;
             }
-        } // benefit of  .at(),
+        }
         for (const auto &o : global_index.at(word2))
         {
             if (o.docID == docID)
@@ -243,10 +229,10 @@ double calculate_slop_multiplier(int docID, const vector<string> &tokens)
                 occ2 = &o;
                 break;
             }
-        } // seems very inefficient for calling loop like this twice
+        } 
 
         if (!occ1 || !occ2)
-            continue; // i didnt get uses of occ1 and occ2
+            continue;
 
         int min_distance = 999999; // INT_MAX
         bool correct_direction = false;
@@ -258,7 +244,7 @@ double calculate_slop_multiplier(int docID, const vector<string> &tokens)
                 const auto &pos_list2 = occ2->page_positions.at(page);
                 for (int p1 : pos_list1)
                 {
-                    for (int p2 : pos_list2)
+                    for (int p2 : pos_list2)// positions are  incremental, we can use two pointer here
                     {
                         int dist = abs(p2 - p1); // no way to reduce this double loop?? the whole code seems robust yet inefficeint.
                         if (dist < min_distance)
@@ -290,7 +276,7 @@ double calculate_slop_multiplier(int docID, const vector<string> &tokens)
 }
 
 // ==========================================
-// STAGE 3: SEARCH & BM25 RANKING
+// STAGE 3: SEARCH & BM25 RANKING// need to seperate bm25 ranking from search
 // ==========================================
 void search(string query, bool silent = false)
 {
@@ -358,7 +344,7 @@ void search(string query, bool silent = false)
         // question two, how can one know which chcek failed and made code skip some critical lines/fucntion
         for (auto &occ : global_index.at(tokens[0]))
         {
-            matched_docs.push_back(occ.docID);
+            matched_docs.push_back(occ.docID);// there seems no use of first intersect
         }
     }
 
@@ -399,7 +385,7 @@ void search(string query, bool silent = false)
             cout << "No matching documents found. Please ensure the typed spelling is correct." << endl;
         return;
     }
-
+//bm25
     double avg_doc_len = 0.0;
     for (const int &x : doc_length)
         avg_doc_len += x;
@@ -492,7 +478,7 @@ void search(string query, bool silent = false)
                 if (global_index.count(tokens[0]))
                 {
                     const Occurrence *first_occ = nullptr;
-                    for (const auto &o : global_index.at(tokens[0]))
+                    for (const auto &o : global_index.at(tokens[0]))// this one is repeated many times in the code, it should be able to reduce redundancy
                     {
                         if (o.docID == docID)
                         {
@@ -540,7 +526,7 @@ void search(string query, bool silent = false)
                                     }
                                 }
                                 if (sequence_valid)
-                                    strict_hits++;
+                                    strict_hits++;//..yes its redundant, i should get hit score of strict from filter strict() itself.
                             }
                             if (strict_hits > 0)
                             {
@@ -553,7 +539,7 @@ void search(string query, bool silent = false)
             // NORMAL PAGE SCORING
             else
             {
-                for (string q : tokens)
+                for (string q : tokens)// maybe should let these ones handle within intersect and union too, calling unordeeep map again and agian can be heavy
                 {
                     if (!global_index.count(q))
                         continue;
@@ -563,8 +549,9 @@ void search(string query, bool silent = false)
                         {
                             for (auto const &[page, pos_list] : occ.page_positions)
                             {
-                                page_hits[page] += pos_list.size();
-                            }
+                                page_hits[page] += pos_list.size();// not really sure what  thast doing// i shouldnt use map here
+                            }//for cross page strict/intersect  checking, absolute word must not be zero, for token[0], we will find docid/ first page, etc and from there will be able toch ifvwords are like pos, pos+1, pos+2, etc,
+                            //actually intersect/union arent related to this, its about slop calculator
                             break;
                         }
                     }
@@ -575,9 +562,9 @@ void search(string query, bool silent = false)
             int max_hits = -1; // illogical; why not 0? i dont want 0 hit page, seems useless
             vector<int> all_pages;
 
-            for (auto const &[page, hits] : page_hits)
+            for (auto const &[page, hits] : page_hits)// this whole loop seems redundant, it could be fitted in the above [page,pos_list]
             { // this seems redundant, why to make map for this, why not do it directly? a possible explanation can be that
-                //[page] are repeative
+                //[page] are repeative//they shouldnt  be repeative
                 all_pages.push_back(page);
                 if (hits > max_hits || (hits == max_hits && page < best_page))
                 {
@@ -586,7 +573,7 @@ void search(string query, bool silent = false)
                 }
             }
 
-            all_pages.erase(std::remove(all_pages.begin(), all_pages.end(), best_page), all_pages.end()); // whats its doing? are we removing bets page? why?
+            all_pages.erase(std::remove(all_pages.begin(), all_pages.end(), best_page), all_pages.end()); // whats its doing? are we removing all after best page? what  the motto of this line?
 
             string filename = fs::path(file_path).filename().string();
             cout << "\n"
@@ -631,15 +618,43 @@ void search(string query, bool silent = false)
 //  Calculates the total byte size of the corpus folder to detect changes
 size_t get_corpus_hash(const string &corpus_path)
 {
-    size_t total_bytes = 0;
-    for (const auto &file : fs::directory_iterator(corpus_path))
+    try
     {
-        if (file.is_regular_file())
+        // We'll return the latest modification timestamp (seconds since epoch)
+        // Consider both the directory itself (for insert/delete) and all files (for edits)
+        std::chrono::system_clock::time_point latest_tp = std::chrono::system_clock::from_time_t(0);
+        // directory last write time (may change on insert/delete on many filesystems)
+        std::error_code ec;
+        auto dir_time = fs::last_write_time(corpus_path, ec);
+        if (!ec)
         {
-            total_bytes += fs::file_size(file.path());
+            auto tp = std::chrono::time_point_cast<std::chrono::system_clock::duration>(
+                dir_time - fs::file_time_type::clock::now() + std::chrono::system_clock::now());
+            if (tp > latest_tp)
+                latest_tp = tp;
         }
+
+        for (const auto &entry : fs::directory_iterator(corpus_path, ec))
+        {
+            if (ec)
+                break;
+
+            std::error_code ec2;
+            auto ftime = fs::last_write_time(entry.path(), ec2);
+            if (ec2)
+                continue;
+            auto tp = std::chrono::time_point_cast<std::chrono::system_clock::duration>(
+                ftime - fs::file_time_type::clock::now() + std::chrono::system_clock::now());
+            if (tp > latest_tp)
+                latest_tp = tp;
+        }
+
+        auto latest_time_t = std::chrono::system_clock::to_time_t(latest_tp);
+        return static_cast<size_t>(latest_time_t);
     }
-    return total_bytes;
+    catch (...) {
+        return 0;
+    }
 }
 bool save_index(const string &filename, size_t corpus_hash)
 {
@@ -658,7 +673,7 @@ bool save_index(const string &filename, size_t corpus_hash)
     size_t docs = ID_allocator.size();
     out.write((char *)&docs, sizeof(docs));
 
-    for (const auto &name : ID_allocator)
+    for (const auto &name : ID_allocator)//any way to write it rather than loop
     {
         size_t len = name.size();
         out.write((char *)&len, sizeof(len));
@@ -671,7 +686,7 @@ bool save_index(const string &filename, size_t corpus_hash)
     out.write((char *)doc_length.data(), dl * sizeof(int));
 
     // ---------- global_index ----------
-    size_t words = global_index.size();
+    size_t words = global_index.size(); //3 loops??? any better way to write it?
     out.write((char *)&words, sizeof(words));
 
     for (const auto &[word, occurrences] : global_index)
@@ -882,7 +897,7 @@ int main(int argc, char *argv[])
                     {
                         current_page_number++;
                         total_pages++;
-                        absolute_word_position = 0; // the plan was to not reset word position after next page
+                        absolute_word_position = 0; // the plan was to not reset word position after next page// page reset or page break must not become problem for search
                         line.erase(std::remove(line.begin(), line.end(), '\f'), line.end());
                     }
 
@@ -917,7 +932,7 @@ int main(int argc, char *argv[])
                             }
 
                             local_word_tracker[raw_word].total_frequency++;
-                            local_word_tracker[raw_word].page_positions[current_page_number].push_back(absolute_word_position);
+                            local_word_tracker[raw_word].page_positions[current_page_number].push_back(absolute_word_position);// doesnt seem i need maps here
                         }
                     }
                 }

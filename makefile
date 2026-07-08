@@ -1,5 +1,5 @@
 build:
-	g++ -std=c++17 main.cpp -o search_engine
+	g++ -std=c++20 main.cpp -o search_engine
 
 # Standard run
 run: build
@@ -7,8 +7,10 @@ run: build
 
 
 # Memory Profiling (Peak RAM)
-profile: build
-	/usr/bin/time -v ./search_engine corpus
+ram: build
+	echo "exit" | /usr/bin/time -f "\n\nPeak RAM Used: %M KB" ./search_engine corpus
+
 
 clean:
 	rm search_engine
+
