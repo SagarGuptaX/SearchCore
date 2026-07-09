@@ -1,5 +1,5 @@
 build:
-	g++ -std=c++20 main.cpp -o search_engine
+	g++ -std=c++20 -O2 -flto tokenizer.cpp index_store.cpp persistence.cpp query_engine.cpp main.cpp -o search_engine
 
 # Standard run
 run: build
