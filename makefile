@@ -3,7 +3,7 @@ build:
 
 # Standard run
 run: build
-	./search_engine corpus
+	/usr/bin/time -f "\n\nPeak RAM Used: %M KB" ./search_engine corpus
 
 
 # Memory Profiling (Peak RAM)
