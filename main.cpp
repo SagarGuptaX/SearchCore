@@ -262,7 +262,7 @@ void search(string query, bool silent = false)
         word.erase(std::remove_if(word.begin(), word.end(), [](unsigned char c) { return !std::isalnum(c); }), word.end());
         std::transform(word.begin(), word.end(), word.begin(), [](unsigned char c) { return std::tolower(c); });
         
-        if (!is_strict_query && stop_words.count(word)) continue;
+        if (stop_words.count(word)) continue;
         if (!word.empty()) tokens.push_back(word);
     }
 
