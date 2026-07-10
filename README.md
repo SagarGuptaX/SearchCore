@@ -169,16 +169,16 @@ All benchmarks were collected on the same hardware using release (`-O2 -flto`) b
 
 | Metric | Result |
 |:--------|-------:|
-| **Indexed Tokens** | **1,159,765** |
+| Indexed Tokens | 1,159,765 |
 | Documents Indexed | 32 |
 | Indexed Pages | 3,870 |
 | Unique Tokens | 52,862 |
 | Serialized Index Size | 12.49 MiB |
-| **Query Throughput** | **~270K Queries/sec** |
-| **Average Query Latency** | **~3.7 μs** |
-| **Warm Startup** | **~170 ms** |
-| Peak RAM Usage | ~68 MB |
-| Cold Index Build | ~1.25 s |
+| Query Throughput | ≈285K Queries/sec |
+| Average Query Latency | ≈3.7 μs |
+| Warm Startup | ≈170 ms |
+| Peak RAM Usage | ≈68 MB |
+| Cold Index Build | ≈1.25 s |
 
 ---
 
@@ -188,7 +188,7 @@ SearchCore evolved through several optimization iterations, with each stable mil
 
 | Metric | Baseline (v2) | Current (v5) | Change |
 |:--------|--------------:|-------------:|-------:|
-| Query Throughput | ~66K QPS | ~270K QPS | **≈4.1×** |
+| Query Throughput | ~66K QPS | ~285K QPS | **≈4.3×** |
 | Average Query Latency | ~15 μs | ~3.7 μs | **↓75%** |
 | Warm Startup | ~900 ms | ~170 ms | **↓81%** |
 | Peak RAM Usage | ~94 MB | ~68 MB | **↓28%** |
@@ -256,8 +256,9 @@ cd SearchCore
 
 make run
 ```
-
 SearchCore automatically builds a serialized index during the first run. Subsequent launches reuse the cached index and rebuild it only when changes are detected within the document corpus.
+
+<em>Note: The repository includes a small sample corpus for demonstration. Performance benchmarks reported in this README were collected on a larger internal evaluation corpus consisting of long-form reports and policy documents totaling over 1.16 million indexed tokens.</em>
 
 ---
 
