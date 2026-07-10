@@ -125,8 +125,11 @@ int main(int argc, char *argv[])
     cout << "Total unique tokens: " << global_index.size() << "\n\n";
     cout << fixed << setprecision(2) << "Average postings list length: " << avg_postings_len << " documents/term\n\n";
 
-    cout << "Welcome User! SearchCore is a file search engine, supporting AND/OR boolean logic.\nBY default all search queries are case insensitive and will be processed in AND logic.\nTo use OR logic, use 'or:' in the beggining of your search query.\nTo use Exact Phrase Search, use 'strict:' in the beggining of your search query.\n\n";
-
+    cout << "SearchCore\n\n"
+     << "A local document search engine supporting case-insensitive AND, OR, and Exact Phrase queries.\n"
+     << "Default mode: AND (no prefix required).\n"
+     << "Use the 'or:' prefix for OR queries (e.g. 'or: apple banana').\n"
+     << "Use the 'strict:' prefix for exact phrase search (e.g. 'strict: apple banana').\n\n";
     string user_query;
     while (true)
     {
@@ -164,16 +167,16 @@ int main(int argc, char *argv[])
             }
 
             auto total_end = chrono::steady_clock::now();
-            auto total_duration = chrono::duration_cast<chrono::microseconds>(total_end - total_start);
+            auto total_duration = chrono::duration_cast<chrono::nanoseconds>(total_end - total_start);
 
             // --- METRIC: Queries Per Second (QPS) ---
-            double avg_latency_ms = (total_duration.count() / 1000.0) / benchmark_limit;
-            double total_seconds = total_duration.count() / 1000000.0;
+            double avg_latency_us = (total_duration.count() / 1000.0) / benchmark_limit;
+            double total_seconds = total_duration.count() / 1000000000.00;
             double qps = total_seconds > 0 ? double(benchmark_limit) / total_seconds : 0;
 
             cout << "[System] Benchmark Complete!\n";
-            cout << "-> Total Time for " << benchmark_limit << " queries: " << total_duration.count() / 1000.0 << " ms\n";
-            cout << "-> Average Latency: " << avg_latency_ms << " ms per query\n";
+            cout << "-> Total Time for " << benchmark_limit << " queries: " << total_duration.count() / 1000000.0 << " ms\n";
+            cout << "-> Average Latency: " << avg_latency_us << " μs per query\n";
             cout << "-> Throughput: " << fixed << setprecision(2) << qps << " Queries Per Second (QPS)\n\n";
             continue;
         }

@@ -42,7 +42,10 @@ The examples below demonstrate exact phrase retrieval, Boolean retrieval, and th
 strict: gian singh
 ```
 
-![Exact Phrase Search](assets/exact_phrase_search.png)
+<!---![Exact Phrase Search](assets/exact_phrase_search.png)--->
+<p align="center">
+  <img src="assets/exact_phrase_search.png" height="470">
+</p>
 
 ---
 
@@ -52,7 +55,13 @@ strict: gian singh
 or: gian singh
 ```
 
-![Boolean OR Search](assets/boolean_or_search.png)
+<!---![Boolean OR Search](assets/boolean_or_search.png)--->
+<p align="center">
+  <img src="assets/boolean_or_search.png" height="470">
+</p>
+<p align="center">
+  <em>Output cropped to highlight the highest-ranked search results.</em>
+</p>
 
 ---
 
@@ -62,7 +71,10 @@ or: gian singh
 !benchmark
 ```
 
-![Built-in Benchmark](assets/benchmark.png)
+<!---![Built-in Benchmark](assets/benchmark.png)--->
+<p align="center">
+  <img src="assets/benchmark.png" height="250">
+</p>
 
 ---
 
@@ -218,8 +230,8 @@ Each stable milestone represents a committed implementation after significant ar
 ```text
 SearchCore/
 ├── assets/
-│   ├── exact_phrase.png
-│   ├── boolean_or.png
+│   ├── exact_phrase_search.png
+│   ├── boolean_or_search.png
 │   └── benchmark.png
 ├── corpus/               # Sample document corpus
 ├── core_index.dat        # Generated serialized index (created after first build)
