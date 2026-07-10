@@ -42,7 +42,7 @@ The examples below demonstrate exact phrase retrieval, Boolean retrieval, and th
 strict: gian singh
 ```
 
-![Exact Phrase Search](assets/exact_phrase.png)
+![Exact Phrase Search](assets/exact_phrase_search.png)
 
 ---
 
@@ -52,7 +52,7 @@ strict: gian singh
 or: gian singh
 ```
 
-![Boolean OR Search](assets/boolean_or.png)
+![Boolean OR Search](assets/boolean_or_search.png)
 
 ---
 
